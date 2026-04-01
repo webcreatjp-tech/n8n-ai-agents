@@ -1,0 +1,385 @@
+{
+  "id": "51mGYaDxIJuZoWsY",
+  "name": "Mail Agent — Mistral AI + Gmail",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "68add434-4c06-4181-9a55-fc4b992f09b7",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1104,
+        -400
+      ],
+      "webhookId": "bab93d21-087e-420b-8bb5-206ff7f23757",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json;\nconst text    = msg?.message?.text || '';\nconst chatId  = msg?.message?.chat?.id?.toString() || '';\nconst firstName = msg?.message?.from?.first_name || 'User';\n\nif (chatId !== '8471849130') {\n  return [{ json: { authorized: false, chatId, text } }];\n}\nreturn [{ json: { authorized: true, chatId, text, firstName } }];"
+      },
+      "id": "23a36dad-57e5-4fce-93b6-72ebeb86035b",
+      "name": "Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e6371d25-ee6a-4e16-ac13-52df6cfbb760",
+      "name": "Autorisé ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "⛔ Non autorisé",
+        "additionalFields": {}
+      },
+      "id": "fa97e609-a76c-4330-9f10-4dae85cad6ff",
+      "name": "Telegram — Refus",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -480,
+        -96
+      ],
+      "webhookId": "87593c5a-2ff8-426a-a623-112eb88ba3f0",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "La date d'aujourd'hui est {{ $now.format('dd MMMM yyyy') }}.\nTu es un assistant email intelligent pour Jean-Philippe Belliard.\n\nTES OUTILS GMAIL :\n- **Lire les emails** (list_emails) : liste les N derniers emails de la boîte de réception\n- **Lire un email** (read_email) : affiche le contenu complet d'un email par son ID\n- **Répondre à un email** (reply_email) : envoie une réponse à un email existant\n- **Envoyer un email** (send_email) : compose et envoie un nouvel email\n\nRÈGLES STRICTES :\n- Utilise TOUJOURS les outils pour accéder aux emails — ne jamais inventer de données\n- Si l'utilisateur demande ses emails → appelle list_emails\n- Si l'utilisateur veut lire un email spécifique → appelle read_email avec l'ID\n- Pour répondre → appelle reply_email avec le messageId/threadId et le texte\n- Pour envoyer un nouveau mail → appelle send_email\n- Réponds toujours en français, de façon concise et claire\n- Si tu as besoin de l'ID d'un email, commence par lister les emails\n- Après avoir envoyé/répondu, confirme l'action à l'utilisateur"
+        }
+      },
+      "id": "52b1ea9e-6f49-4210-8133-34aee9c19c59",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -256,
+        -512
+      ]
+    },
+    {
+      "parameters": {
+        "model": "mistral-large-latest",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "12c91592-be6b-481f-8e69-d18a980acff0",
+      "name": "Mistral Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        -272
+      ],
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "n9LmsdcF68quQS43",
+          "name": "Mistral Mail Agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=mail-agent-{{ $now.format('yyyy-MM-dd') }}"
+      },
+      "id": "ae7f2fce-2aff-4c4c-a95b-5f316e2272e9",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": "={{ $fromAI('Limit', 'Number of emails to retrieve, default 10', 'number') }}",
+        "filters": {}
+      },
+      "id": "e245a826-0381-45f9-bb24-3764520461ce",
+      "name": "list_emails",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        -80
+      ],
+      "webhookId": "96a3582e-32c0-4bf7-a809-8aa7fc04ae79",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "oWi8NIF0PA1jNesS",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $fromAI('Message_ID', 'The Gmail message ID to read', 'string') }}"
+      },
+      "id": "9eae8837-dd9d-42d6-b253-8cd7e93373f2",
+      "name": "read_email",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        -16
+      ],
+      "webhookId": "082c56d5-49e0-42d4-9cf3-35c2e0afa735",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "oWi8NIF0PA1jNesS",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $fromAI('To', 'Recipient email address', 'string') }}",
+        "subject": "={{ $fromAI('Subject', 'Email subject', 'string') }}",
+        "message": "={{ $fromAI('Message', 'Email body content', 'string') }}",
+        "options": {}
+      },
+      "id": "e02d46d2-40f1-4968-8b4b-ff5051ffc1e8",
+      "name": "send_email",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        -64
+      ],
+      "webhookId": "3af940d4-68cf-49b7-a04e-acb498889ebc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "oWi8NIF0PA1jNesS",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $fromAI('Message_ID', 'The Gmail message ID to reply to', 'string') }}",
+        "message": "={{ $fromAI('Reply_Text', 'The reply text content', 'string') }}",
+        "options": {}
+      },
+      "id": "f2fc5a15-b860-4740-bd1b-ee82bb7e43e2",
+      "name": "reply_email",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        -112
+      ],
+      "webhookId": "24addb5a-855c-4a8c-a29b-01b0ffafb4d9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "oWi8NIF0PA1jNesS",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Auth').first().json.chatId }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "3ba9a7c5-2ad9-4324-82b6-e1608a0c0ee8",
+      "name": "Telegram — Réponse",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        -576
+      ],
+      "webhookId": "94c820d8-f08d-4acd-8b78-c3e24ed6f360",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth": {
+      "main": [
+        [
+          {
+            "node": "Autorisé ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autorisé ?": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram — Refus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Telegram — Réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "list_emails": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "read_email": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send_email": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "reply_email": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "createdAt": "2026-03-15 11:05:47.781",
+  "updatedAt": "2026-03-15 11:08:14.072",
+  "description": ""
+}
