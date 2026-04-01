@@ -1,0 +1,492 @@
+{
+  "id": "kpibEfLpW49yS8Xp",
+  "name": "OpenClaw — Main Agent",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "7d0097aa-4c9e-4488-8598-8df071ceb53b",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -32,
+        -128
+      ],
+      "webhookId": "openclaw-telegram-in",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─── Init Session ──────────────────────────────────────\nconst msg    = $input.item.json.message;\nconst userId = String(msg?.from?.id || 'unknown');\nconst chatId = String(msg?.chat?.id || userId);\nconst text   = msg?.text || '';\nconst ts     = new Date().toISOString();\nconst sessionId = `${userId}_${new Date().toISOString().slice(0,10)}`;\n\nreturn [{\n  json: {\n    session_id: sessionId,\n    user_id:    userId,\n    chat_id:    chatId,\n    user_message: text,\n    timestamp: ts\n  }\n}];"
+      },
+      "id": "96ca347e-f2f5-4541-9da8-2362748e95f0",
+      "name": "Init Session",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  COALESCE(s.context_summary, 'Nouvelle session.') AS context_summary,\n  COALESCE(\n    (SELECT json_agg(j) FROM (\n      SELECT json_build_object('type', mf.fact_type, 'content', mf.content) AS j\n      FROM memory_facts mf\n      WHERE mf.session_id = '{{ $json.session_id }}'\n      ORDER BY mf.created_at DESC\n      LIMIT 10\n    ) sub),\n    '[]'::json\n  ) AS recent_facts\nFROM (SELECT 1) dummy\nLEFT JOIN sessions s ON s.telegram_user = {{ $json.user_id }}::bigint;",
+        "options": {}
+      },
+      "id": "d8c45620-39ed-45e4-a194-9b75e7b67346",
+      "name": "Load Session Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        416,
+        -128
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "Z7nw142z1whwsEpc",
+          "name": "openclaw"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const session   = $('Init Session').item.json;\nconst dbResult  = $input.item.json;\nconst ctxSummary = dbResult?.context_summary || 'Nouvelle session.';\nconst recentFacts = dbResult?.recent_facts || [];\n\nconst factsText = Array.isArray(recentFacts) && recentFacts.length > 0\n  ? recentFacts.map(f => `[${f.type}] ${f.content}`).join('\\n')\n  : 'Aucun fait mémorisé.';\n\nconst enrichedPrompt = `CONTEXTE SESSION:\\n${ctxSummary}\\n\\nFAITS MÉMORISÉS:\\n${factsText}\\n\\nMESSAGE UTILISATEUR:\\n${session.user_message}`;\n\nreturn [{\n  json: {\n    ...session,\n    context_summary: ctxSummary,\n    recent_facts: recentFacts,\n    enriched_prompt: enrichedPrompt\n  }\n}];"
+      },
+      "id": "d2ab049e-363d-4270-a725-34bc94d9821b",
+      "name": "Merge Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Merge Context').item.json.enriched_prompt }}",
+        "options": {
+          "systemMessage": "Tu es OpenClaw, un assistant IA orchestrateur piloté via Telegram.\n\n## TES OUTILS DISPONIBLES\n- list_sub_agents : Liste tous les sous-agents disponibles dans le registry\n- query_memory(query) : Recherche dans ta mémoire long terme\n- save_memory(fact_type, content) : Sauvegarde un fait important  \n- call_sub_agent(agent_name, payload) : Délègue une tâche à un sous-agent existant\n- create_new_sub_agent(agent_name, description, system_prompt, input_parameters) : Crée un NOUVEAU sous-agent spécialisé\n\n## RÈGLES DE DÉCISION STRICTES\n\n### Réponds DIRECTEMENT si :\n- La question est conversationnelle, générale, ou de connaissance simple\n- La tâche prend moins de 2 étapes\n- Aucun outil spécialisé n'est nécessaire\n\n### Appelle un SUB-AGENT EXISTANT si :\n1. Tu as appelé list_sub_agents et un agent correspond à la tâche\n2. La tâche est spécialisée (code, recherche web, analyse données, etc.)\n→ Toujours vérifier le registry AVANT de créer\n\n### CRÉE un NOUVEAU sous-agent SEULEMENT si :\n1. list_sub_agents ne retourne AUCUN agent adapté\n2. ET la tâche est suffisamment complexe/récurrente pour mériter un agent dédié\n3. ET tu ne peux pas résoudre la tâche toi-même avec tes outils actuels\n4. Annonce explicitement à l'utilisateur que tu vas créer un nouvel agent\n\n## FORMAT DE RÉPONSE TELEGRAM\n- Utilise des emojis pour la lisibilité\n- Structure : [Résultat] puis [Source: agent utilisé] si pertinent\n- Maximum 3000 caractères par message\n- Code dans des blocs ```\n- Langue : français sauf si l'utilisateur parle autrement\n\n## MÉMOIRE\n- Sauvegarde automatiquement les préférences utilisateur détectées\n- Mémorise les résultats importants avec save_memory()\n- Commence par utiliser le contexte fourni dans le prompt sans recalling",
+          "maxIterations": 8,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "6c1a285c-9ee0-4a50-aacb-297916d674d5",
+      "name": "AI Agent — OpenClaw Brain",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        832,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5:7b-instruct-q4_K_M",
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "a93cb7f2-9120-4bef-9903-78a748950306",
+      "name": "Ollama — qwen2.5:14b",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        720,
+        240
+      ],
+      "credentials": {
+        "ollamaApi": {
+          "id": "RWNmJIFWoL7QVhbe",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Merge Context').item.json.session_id }}",
+        "contextWindowLength": 6
+      },
+      "id": "4285e226-92d8-4b3a-868d-aa637c64fe59",
+      "name": "Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        336,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "name": "list_sub_agents",
+        "description": "Liste tous les sous-agents disponibles dans le registry OpenClaw. Appelle cet outil AVANT de décider si tu dois créer un nouvel agent ou en appeler un existant.",
+        "workflowId": "ghO8HRO02Y9Jh1hV",
+        "fields": {
+          "values": []
+        }
+      },
+      "id": "e3646a98-d13a-4e89-8a9f-650457f5077f",
+      "name": "Tool: list_sub_agents",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "name": "query_memory",
+        "description": "Recherche dans la mémoire long terme. Paramètre: query (string) - le texte à rechercher.",
+        "workflowId": "lBgTlXZezgNN7Vi2",
+        "fields": {
+          "values": [
+            {
+              "name": "query",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "a20fd2f0-bd72-4089-88b1-ff5136c73faa",
+      "name": "Tool: query_memory",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        944,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "name": "save_memory",
+        "description": "Sauvegarde un fait important en mémoire long terme. Paramètres: fact_type (string: preference|task|entity|result), content (string) - le contenu à mémoriser.",
+        "workflowId": "qs3jGraBIxUERbIq",
+        "fields": {
+          "values": [
+            {
+              "name": "fact_type",
+              "type": "string"
+            },
+            {
+              "name": "content",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "d08361bc-dd07-4033-a711-5ff3522eb3c5",
+      "name": "Tool: save_memory",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1184,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "name": "call_sub_agent",
+        "description": "Appelle un sous-agent existant du registry pour déléguer une tâche spécialisée. Paramètres: agent_name (string), workflow_id (string), payload (object JSON stringifié avec les données à traiter).",
+        "workflowId": "t4hYYJS3MrO0MBSf",
+        "fields": {
+          "values": [
+            {
+              "name": "agent_name",
+              "type": "string"
+            },
+            {
+              "name": "workflow_id",
+              "type": "string"
+            },
+            {
+              "name": "payload",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "4c090193-0328-4c3c-977f-a6cf6c7769ac",
+      "name": "Tool: call_sub_agent",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1376,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "name": "create_new_sub_agent",
+        "description": "Crée un NOUVEAU sous-agent spécialisé via l'API n8n et l'enregistre dans le registry. Utilise cet outil SEULEMENT si list_sub_agents ne retourne aucun agent adapté ET la tâche est complexe/récurrente. Paramètres: agent_name (string sans espaces), description (string), system_prompt (string), input_parameters (JSON array stringifié).",
+        "workflowId": "z1w5Q33mcWLxDyIJ",
+        "fields": {
+          "values": [
+            {
+              "name": "agent_name",
+              "type": "string"
+            },
+            {
+              "name": "description",
+              "type": "string"
+            },
+            {
+              "name": "system_prompt",
+              "type": "string"
+            },
+            {
+              "name": "input_parameters",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "b1a10973-cbe7-4c9c-8594-100bc8582294",
+      "name": "Tool: create_new_sub_agent",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1568,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sessions (session_id, telegram_user, context_summary)\nVALUES ('{{ $('Merge Context').item.json.session_id }}', {{ $('Merge Context').item.json.user_id }}::bigint, 'Session active')\nON CONFLICT (session_id) DO UPDATE\n  SET updated_at = NOW();",
+        "options": {}
+      },
+      "id": "060b9f9e-5a9e-4e02-b4e2-a696b0979958",
+      "name": "Save Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1136,
+        -144
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "Z7nw142z1whwsEpc",
+          "name": "openclaw"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const agentOutput = $('AI Agent — OpenClaw Brain').item.json.output || '';\nconst MAX_LEN = 3900;\n\nlet formatted = agentOutput;\nif (formatted.length > MAX_LEN) {\n  formatted = formatted.slice(0, MAX_LEN) + '\\n\\n_(message tronqué — suite disponible)_';\n}\n\nreturn [{\n  json: {\n    chat_id: $('Merge Context').item.json.chat_id,\n    text: formatted\n  }\n}];"
+      },
+      "id": "fbee6333-5f18-4027-8215-08a5ed35f0b0",
+      "name": "Format Telegram Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "449a648b-5ef1-4297-9c21-45a176b6919a",
+      "name": "Telegram Send",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1520,
+        -128
+      ],
+      "webhookId": "dfbf0081-7be5-4167-9a9b-a92d5ae22eb1",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Init Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Session": {
+      "main": [
+        [
+          {
+            "node": "Load Session Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Session Context": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent — OpenClaw Brain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent — OpenClaw Brain": {
+      "main": [
+        [
+          {
+            "node": "Save Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Session": {
+      "main": [
+        [
+          {
+            "node": "Format Telegram Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram Response": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama — qwen2.5:14b": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent — OpenClaw Brain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent — OpenClaw Brain",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: list_sub_agents": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent — OpenClaw Brain",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: query_memory": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent — OpenClaw Brain",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: save_memory": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent — OpenClaw Brain",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: call_sub_agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent — OpenClaw Brain",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: create_new_sub_agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent — OpenClaw Brain",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "createdAt": "2026-03-11 07:12:30.520",
+  "updatedAt": "2026-03-11 07:39:55.105",
+  "description": ""
+}
