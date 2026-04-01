@@ -1,0 +1,533 @@
+{
+  "id": "eBqQOgoZqLzCReYp",
+  "name": "Agent JP — Assistant Personnel",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "c00dfbdd-894a-4ff9-90f5-7b9fb347d270",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1280,
+        -624
+      ],
+      "webhookId": "cee0977c-3313-4124-9a6a-f17084a6ca06",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json;\nconst text = msg?.message?.text || '';\nconst chatId = msg?.message?.chat?.id?.toString() || '';\nconst firstName = msg?.message?.from?.first_name || 'JP';\nconst ALLOWED = '8471849130';\nif (chatId !== ALLOWED) return [{ json: { authorized: false, chatId, text } }];\nreturn [{ json: { authorized: true, chatId, text, firstName } }];"
+      },
+      "id": "1c9e722e-69c5-4b00-8426-4572460032ca",
+      "name": "Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "060b3284-f94a-4cf7-9a64-8a6af6150954",
+      "name": "Autorisé ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -848,
+        -752
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "⛔ Accès non autorisé.",
+        "additionalFields": {}
+      },
+      "id": "70b0297b-97c9-453d-b345-a8c9cf161004",
+      "name": "Telegram — Refus",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -832,
+        -256
+      ],
+      "webhookId": "3658f619-3574-4c39-93a1-7663d616c906",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "Tu es l'assistant personnel de Jean-Philippe Belliard. Date du jour : {{ $now.format('dd MMMM yyyy') }}.\n\nRÈGLES STRICTES :\n- Réponds TOUJOURS en français, de façon concise et directe.\n- Emails/mails → appelle \"Gmail — Lister\" puis \"Gmail — Lire\" pour le détail.\n- Agenda/rendez-vous/événements → appelle \"Agenda — Lister\".\n- Créer un événement → appelle \"Agenda — Créer\".\n- Retrouver une info mémorisée → appelle \"Mémoire — Lire\".\n- Mémoriser une info importante → appelle \"Mémoire — Sauvegarder\".\n- Ne JAMAIS inventer de données. Si un tool retourne vide → dis \"Aucun résultat trouvé\".\n- maxIterations : 8",
+          "maxIterations": 8
+        }
+      },
+      "id": "e1da2f0c-cd28-48fd-9f4f-7ebb527c2d2f",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -288,
+        -832
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=agent-jp-{{ $now.format('yyyy-MM-dd') }}"
+      },
+      "id": "d70e8062-c690-4bd4-9e12-f8bfb40d39ff",
+      "name": "Mémoire Session",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -432,
+        -608
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": "={{ $fromAI('Limit', 'Nombre de messages à récupérer', 'number') }}",
+        "filters": {}
+      },
+      "id": "27eeed59-ab8e-4246-adbe-2707e3a251f0",
+      "name": "Gmail — Lister",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        -416,
+        -400
+      ],
+      "webhookId": "85823f5e-4456-40fb-9227-456d65e9fe1a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "oWi8NIF0PA1jNesS",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $fromAI('Message_ID', 'ID du message Gmail', 'string') }}"
+      },
+      "id": "d1f0ae8d-9d5b-409c-bd71-a2e73b880577",
+      "name": "Gmail — Lire",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        -352,
+        -240
+      ],
+      "webhookId": "3d0bac6e-3f92-40b4-8553-c80db7f8c31a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "oWi8NIF0PA1jNesS",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $fromAI('To', 'Destinataire', 'string') }}",
+        "subject": "={{ $fromAI('Subject', 'Objet du mail', 'string') }}",
+        "message": "={{ $fromAI('Message', 'Corps du mail', 'string') }}",
+        "options": {}
+      },
+      "id": "75d29d18-7960-4fd3-be21-d42ebd7e12ab",
+      "name": "Gmail — Envoyer",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        -464
+      ],
+      "webhookId": "d985e08c-3b2e-438d-94aa-c7b8d0313ada",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "oWi8NIF0PA1jNesS",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "jeanphilippe.belliard84@gmail.com",
+          "mode": "list",
+          "cachedResultName": "jeanphilippe.belliard84@gmail.com"
+        },
+        "options": {
+          "orderBy": "startTime"
+        }
+      },
+      "id": "f55806e8-9d05-48b1-8f22-36179f06d843",
+      "name": "Agenda — Lister",
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        304,
+        -192
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "SAgabnPI4tUJa4gh",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "jeanphilippe.belliard84@gmail.com",
+          "mode": "list",
+          "cachedResultName": "jeanphilippe.belliard84@gmail.com"
+        },
+        "start": "={{ $fromAI('Start', 'Début ISO 8601', 'string') }}",
+        "end": "={{ $fromAI('End',   'Fin ISO 8601',   'string') }}",
+        "additionalFields": {
+          "description": "={{ $fromAI('Description', 'Description',           'string') }}",
+          "location": "={{ $fromAI('Location',    'Lieu',                  'string') }}",
+          "summary": "={{ $fromAI('Summary',     \"Titre de l'événement\", 'string') }}"
+        }
+      },
+      "id": "36585ada-6f8b-47c9-a02a-2444056fbbd7",
+      "name": "Agenda — Créer",
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        -240
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "SAgabnPI4tUJa4gh",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Lit la mémoire persistante de l'agent (Google Sheets). Retourne toutes les entrées mémorisées : Date, Clé, Valeur. Utilise cet outil pour retrouver des informations enregistrées lors de conversations précédentes.",
+        "documentId": {
+          "__rl": true,
+          "value": "1MX5fj24oMbTZ4imsdl5Sx1x1iOg0IHdsFoSJHHuLPKU",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Mémoire Agent JP",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "2ec52260-cf9e-4b89-aa2e-c72a4a13f281",
+      "name": "Mémoire — Lire",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        160,
+        -368
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "NznwYiyQzqjAKGIB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Sauvegarde une information en mémoire persistante (Google Sheets). Colonnes : Date (auto), Clé (sujet/titre court), Valeur (contenu détaillé). Utilise cet outil pour retenir des informations importantes entre les conversations.",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1MX5fj24oMbTZ4imsdl5Sx1x1iOg0IHdsFoSJHHuLPKU",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Mémoire Agent JP",
+          "mode": "name"
+        },
+        "columns": {
+          "value": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Date": "={{ $now.format('yyyy-MM-dd') }}",
+              "Clé": "={{ $fromAI('Cle',    'Sujet court à mémoriser',      'string') }}",
+              "Valeur": "={{ $fromAI('Valeur', 'Information détaillée à retenir', 'string') }}"
+            },
+            "matchingColumns": [],
+            "schema": []
+          }
+        },
+        "options": {}
+      },
+      "id": "4d331676-700a-4ed1-af47-6328cdcd2701",
+      "name": "Mémoire — Sauvegarder",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -208,
+        -416
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "NznwYiyQzqjAKGIB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Auth').first().json.chatId }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "434f24c7-3613-4ed7-a82c-36fcf2c1c692",
+      "name": "Telegram — Réponse",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        352,
+        -480
+      ],
+      "webhookId": "4d53bada-21ea-4e7c-a132-285d374b272f",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5:7b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -624,
+        -528
+      ],
+      "id": "4adcac61-f82f-4895-99b8-cbb16d7ed1d1",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "RWNmJIFWoL7QVhbe",
+          "name": "Ollama account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth": {
+      "main": [
+        [
+          {
+            "node": "Autorisé ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autorisé ?": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram — Refus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Telegram — Réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mémoire Session": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail — Lister": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail — Lire": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail — Envoyer": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agenda — Lister": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agenda — Créer": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mémoire — Lire": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mémoire — Sauvegarder": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "createdAt": "2026-03-14 17:29:08.468",
+  "updatedAt": "2026-03-17 14:19:08.040",
+  "description": ""
+}
