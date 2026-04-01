@@ -1,0 +1,274 @@
+{
+  "id": "ymYiUo12WFFESmj4",
+  "name": "Agent JP - Telegram + Qwen3.5:9B (K10)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "e935e5ed-4faa-494a-bb8e-41a1a1e952e5",
+      "name": "📩 Telegram Trigger1",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1056,
+        -16
+      ],
+      "webhookId": "agent-jp-telegram-hook",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.message.chat.id }}",
+              "operation": "equal",
+              "value2": "TON_CHAT_ID_AUTORISE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "90f1a58c-0edf-4f73-9aee-e9ff89d57091",
+      "name": "🔒 IF Whitelist1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Détection du type de message ──────────────────────────────\nconst msg = $input.item.json.message;\n\nlet userText = '';\nlet messageType = 'text';\nlet chatId = msg.chat.id;\nlet username = msg.from?.first_name || 'Utilisateur';\n\nif (msg.text) {\n  userText = msg.text;\n  messageType = 'text';\n} else if (msg.photo) {\n  const caption = msg.caption || '';\n  userText = `[PHOTO]${caption ? ' ' + caption : ''}`;\n  messageType = 'photo';\n} else if (msg.voice || msg.audio) {\n  userText = '[VOCAL - Whisper non encore branché]';\n  messageType = 'voice';\n} else if (msg.document) {\n  userText = `[DOCUMENT: ${msg.document.file_name || 'fichier'}]`;\n  messageType = 'document';\n} else {\n  userText = '[Message non reconnu]';\n  messageType = 'unknown';\n}\n\nconst systemPrompt = `Tu es Agent JP, assistant IA local expert en automatisation n8n, workflows no-code, intégrations API et stratégie digitale pour PME.\n\nStyle de réponse :\n- Réponds TOUJOURS en français sauf demande explicite.\n- Structure claire : titre en gras, sections numérotées ou listes.\n- Concis et actionnable : pas de blabla, directement utile.\n- Termine TOUJOURS par une question pertinente pour approfondir.\n- Si tu ne sais pas quelque chose, dis-le honnêtement.\n\nContexte technique :\n- Tu tournes en local sur GMKtec NucBox K10 (Intel i9, 64GB RAM, Ubuntu 24).\n- Stack : n8n + Ollama + qwen2.5 / llama3.1.\n- Spécialités : immobilier, santé, lead generation, automatisation PME.`;\n\nreturn [\n  {\n    json: {\n      chatId,\n      username,\n      userText,\n      messageType,\n      systemPrompt,\n      timestamp: new Date().toISOString()\n    }\n  }\n];"
+      },
+      "id": "1d8c3631-441f-4418-9a0e-2b3a3928a3cf",
+      "name": "⚙️ Code Prep & Detect Type1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Formatage Markdown pour Telegram ──────────────────────────\n// Le node Ollama (@n8n/n8n-nodes-langchain.ollama) retourne\n// la réponse dans $json.message (string directe)\nconst raw = $json.message || $json.text || $json.content || '';\nconst chatId = $('⚙️ Code Prep & Detect Type1').item.json.chatId;\n\nlet formatted = raw\n  // Headers # → *Titre*\n  .replace(/^#{1,2}\\s+(.+)$/gm, '*$1*')\n  // Headers ### → _Sous-titre_\n  .replace(/^#{3,}\\s+(.+)$/gm, '_$1_')\n  // Bold **text** → *text*\n  .replace(/\\*\\*(.+?)\\*\\*/g, '*$1*')\n  // Italic *text* → _text_\n  .replace(/(?<!\\n)\\*([^*\\n]+)\\*/g, '_$1_')\n  // Listes - / * → •\n  .replace(/^[\\-\\*]\\s+/gm, '• ')\n  // Nettoyer lignes vides multiples\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\n\n// Sécurité longueur Telegram (4096 chars max)\nif (formatted.length > 4000) {\n  formatted = formatted.substring(0, 3990) + '...\\n\\n_[Réponse tronquée]_';\n}\n\nreturn [\n  {\n    json: {\n      chatId,\n      formattedResponse: formatted\n    }\n  }\n];"
+      },
+      "id": "63274840-a792-45f5-962e-0b58fffdd06b",
+      "name": "✨ Code Format Markdown1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.formattedResponse }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "d8198eb8-c8e8-4fff-bd40-7639dfaed69f",
+      "name": "📤 Telegram Send1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        576,
+        112
+      ],
+      "webhookId": "4e0af43d-c9dc-475a-939d-46e3a56575d3",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('📩 Telegram Trigger1').item.json.message.chat.id }}",
+        "text": "⛔ *Accès non autorisé.*\n\nCe bot est privé.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "722c8636-f156-4c5b-8881-a3f9e9fd6557",
+      "name": "🚫 Telegram Deny1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -592,
+        224
+      ],
+      "webhookId": "eedf8f3c-ad30-4454-9962-b6625ac77732",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('⚙️ Code Prep & Detect Type1').item.json.chatId }}",
+        "text": "⚠️ *Erreur lors du traitement.*\n\nVérifie qu'Ollama tourne : `ollama ps`",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "d096e561-497b-433e-bdd8-8900ebae8d08",
+      "name": "❌ Error Handler1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        256,
+        304
+      ],
+      "webhookId": "52ac223a-70a0-4e86-ac18-2af0f744c9f1",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "mistral:latest",
+          "mode": "list",
+          "cachedResultName": "mistral:latest"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.systemPrompt }}"
+            },
+            {
+              "content": "={{ $json.userText }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1,
+          "top_p": 0.9,
+          "num_ctx": 8192,
+          "num_thread": 20
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.ollama",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        32
+      ],
+      "id": "058c0287-1e68-407d-8d9c-5dd88d304b98",
+      "name": "Ollama",
+      "credentials": {
+        "ollamaApi": {
+          "id": "RWNmJIFWoL7QVhbe",
+          "name": "Ollama account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "connections": {
+    "📩 Telegram Trigger1": {
+      "main": [
+        [
+          {
+            "node": "🔒 IF Whitelist1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔒 IF Whitelist1": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Code Prep & Detect Type1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🚫 Telegram Deny1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Code Prep & Detect Type1": {
+      "main": [
+        [
+          {
+            "node": "Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✨ Code Format Markdown1": {
+      "main": [
+        [
+          {
+            "node": "📤 Telegram Send1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama": {
+      "main": [
+        [
+          {
+            "node": "✨ Code Format Markdown1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Error Handler1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "createdAt": "2026-03-06 10:00:49.091",
+  "updatedAt": "2026-03-14 17:15:39.070",
+  "description": ""
+}
