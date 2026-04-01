@@ -1,0 +1,759 @@
+{
+  "id": "yxA2Xr8bcjMvLkzn",
+  "name": "Agent JP v4 Router",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "c5b76cd0-213e-4251-a139-1e06b992b001",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2272,
+        -336
+      ],
+      "webhookId": "9ed288f8-213c-4d44-b07d-e8a12c19719b",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json;\nconst text = msg?.message?.text || '';\nconst chatId = msg?.message?.chat?.id?.toString() || '';\nconst firstName = msg?.message?.from?.first_name || 'JP';\nconst ALLOWED_CHAT = \"8471849130\";\n\nif (chatId !== ALLOWED_CHAT) {\n  return [{ json: { authorized: false, chatId, text } }];\n}\nreturn [{ json: { authorized: true, chatId, text, firstName } }];\n"
+      },
+      "id": "25140370-4077-4d09-b836-a7e95cbbce70",
+      "name": "Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2032,
+        -448
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1f0c82c2-5ba9-4d15-aeb1-10b693f9ccc1",
+      "name": "Autorisé ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1840,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Auth').first().json.chatId }}",
+        "text": "⛔ Non autorisé",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "1546ef88-c8ec-46d7-bf05-1095876e9fdb",
+      "name": "Telegram — Refus",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1600,
+        -16
+      ],
+      "webhookId": "eea55156-0bf5-45ea-aa2b-6d1a8ad19de1",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Auth').first().json.chatId }}",
+        "text": "⏳ Je traite ta demande...",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "669781ba-e1a0-4555-8814-628576daa5b9",
+      "name": "Telegram — Attente",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1472,
+        -544
+      ],
+      "webhookId": "76da3a80-e4af-40e3-9475-7a315cb4e13f",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "llama3.1:8b",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        -240
+      ],
+      "id": "8cbe6e88-753f-43f7-80ba-f31b92ece3f5",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "RWNmJIFWoL7QVhbe",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output || '';\n\n// Extraire le JSON même si l'AI a ajouté du texte autour\nconst match = raw.match(/\\{[\\s\\S]*\\}/);\nif (!match) {\n  return [{ json: { action: 'error', params: {}, raw } }];\n}\n\ntry {\n  const parsed = JSON.parse(match[0]);\n  return [{ json: parsed }];\n} catch (e) {\n  return [{ json: { action: 'error', params: {}, raw, error: e.message } }];\n}\n"
+      },
+      "id": "07fd2a1c-5f6c-4941-9ef7-6041d7874b39",
+      "name": "Parse Router JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -784,
+        -192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://n8n.web-creat.com/webhook/search-gmail",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $('Parse Router JSON').first().json.params.query }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $('Auth').first().json.chatId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c7a81deb-f3b5-450b-8262-ec1a660b5519",
+      "name": "Webhook /search-gmail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -272,
+        -432
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://n8n.web-creat.com/webhook/search-calendar",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $('Parse Router JSON').first().json.params.query }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $('Auth').first().json.chatId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3e13fbfa-f14f-43e2-baac-98bb212d7c60",
+      "name": "Webhook /search-calendar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -272,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://n8n.web-creat.com/webhook/search-workflow",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $('Parse Router JSON').first().json.params.query }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $('Auth').first().json.chatId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b250b28a-666c-4797-b57b-1de73273f6a3",
+      "name": "Webhook /search-workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -320,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://n8n.web-creat.com/webhook/workflow-gen",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "spec",
+              "value": "={{ $('Parse Router JSON').first().json.params.spec }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $('Auth').first().json.chatId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d059e3f9-11c0-461b-b9f9-179c204ef27b",
+      "name": "Webhook /workflow-gen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -320,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://n8n.web-creat.com/webhook/analyze-workflow",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $('Parse Router JSON').first().json.params.id }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $('Auth').first().json.chatId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c084f84b-d5d4-41f4-96a6-33609e344961",
+      "name": "Webhook /analyze-workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -320,
+        544
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "5c5c425c-d9ab-487f-904e-f09706c65216",
+      "name": "Merge réponses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        336,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Auth').first().json.chatId }}",
+        "text": "={{ $json.response }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "e118f5ff-9dd2-4d37-bde0-35f6a73902f0",
+      "name": "Telegram — Réponse",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        80
+      ],
+      "webhookId": "c323868e-464b-41b8-b55f-1103083dfea9",
+      "credentials": {
+        "telegramApi": {
+          "id": "5IqF446S7446SmUc",
+          "name": "agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://n8n.web-creat.com/webhook/chat",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ $('Parse Router JSON').first().json.params.message }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $('Auth').first().json.chatId }}"
+            },
+            {
+              "name": "firstName",
+              "value": "={{ $('Auth').first().json.firstName }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d6e88ec4-eba8-44d7-a78d-815c9348ff5a",
+      "name": "Webhook /chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -320,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Classifie ce message et extrais les paramètres : {{ $('Auth').first().json.text }}",
+        "options": {
+          "systemMessage": "Tu es ROUTER, l'intelligence de routage de l'Agent JP v4. Réponds UNIQUEMENT avec un objet JSON valide. Zéro texte avant ou après. Zéro explication.\n\nACTIONS :\n- \"gmail\"        → email à lire, chercher ou envoyer\n- \"calendar\"     → agenda, rendez-vous, réunion, planning\n- \"n8n_search\"   → chercher un workflow existant\n- \"workflow_gen\" → créer un nouveau workflow\n- \"analyze\"      → analyser erreurs ou logs d'exécution\n- \"chat\"         → tout le reste (salutation, question, conversation)\n\nFORMAT STRICT :\n{\"action\": \"<action>\", \"params\": {\"query\": \"<mots clés>\", \"spec\": \"<description>\", \"id\": \"<ID>\", \"message\": \"<message original>\"}}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -1120,
+        -480
+      ],
+      "id": "9ce3d7a0-2584-4717-b5d2-3e0a43a9dc4b",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "gmail",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "b7d28735-c45f-4d58-b8db-8621c59adaf4"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gmail"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "calendar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "2de43a50-5373-4110-adb8-2fd612b7f3d2"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "calendar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "n8n_search",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "b66b87de-1506-4038-9557-5c2d442fbfc4"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "n8n_search"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "workflow_gen",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a5c5cac5-319f-4c56-8386-651dd47509ad"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "workflow_gen"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "analyze",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "6572fbc8-1bac-4004-bfa1-5f59caca4636"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "analyze"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "chat",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "d84da6d3-bda7-49b7-a8f4-fbc00f6ab22d"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "chat"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "f439f46a-e9ec-4d89-b2b7-f048cb0e845f",
+      "name": "Switch (action)1",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -880,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth": {
+      "main": [
+        [
+          {
+            "node": "Autorisé ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autorisé ?": {
+      "main": [
+        [
+          {
+            "node": "Telegram — Attente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram — Refus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram — Attente": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Router JSON": {
+      "main": [
+        [
+          {
+            "node": "Switch (action)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook /search-gmail": {
+      "main": [
+        [
+          {
+            "node": "Merge réponses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook /search-calendar": {
+      "main": [
+        [
+          {
+            "node": "Merge réponses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook /search-workflow": {
+      "main": [
+        [
+          {
+            "node": "Merge réponses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook /workflow-gen": {
+      "main": [
+        [
+          {
+            "node": "Merge réponses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook /analyze-workflow": {
+      "main": [
+        [
+          {
+            "node": "Merge réponses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge réponses": {
+      "main": [
+        [
+          {
+            "node": "Telegram — Réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch (action)1": {
+      "main": [
+        [
+          {
+            "node": "Webhook /search-gmail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook /search-calendar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook /search-workflow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook /workflow-gen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook /analyze-workflow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook /chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Parse Router JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook /chat": {
+      "main": [
+        [
+          {
+            "node": "Merge réponses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "createdAt": "2026-03-02 17:19:56.389",
+  "updatedAt": "2026-03-03 09:23:56.513",
+  "description": ""
+}
