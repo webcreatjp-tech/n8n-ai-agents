@@ -1,0 +1,315 @@
+{
+  "id": "TlZyZz4GVO5ONdRq",
+  "name": "Agent Orientation Professionnelle - Mistral AI",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "orientation-pro",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8e0a4e75-088c-42fa-96c1-19fbce4d667e",
+      "name": "Webhook - Profil Utilisateur",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        -288
+      ],
+      "webhookId": "orientation-pro-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-success",
+              "name": "success",
+              "value": "={{ $json.success }}",
+              "type": "boolean"
+            },
+            {
+              "id": "assign-timestamp",
+              "name": "timestamp",
+              "value": "={{ $json.timestamp }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-metiers",
+              "name": "metiers",
+              "value": "={{ $json.metiers }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-total",
+              "name": "total_metiers",
+              "value": "={{ $json.total_metiers }}",
+              "type": "number"
+            },
+            {
+              "id": "assign-html",
+              "name": "html",
+              "value": "={{ $json.html }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-top",
+              "name": "top_metier",
+              "value": "={{ $json.metiers[0].nom }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-score",
+              "name": "top_score",
+              "value": "={{ $json.metiers[0].compatibilite }}",
+              "type": "number"
+            },
+            {
+              "id": "assign-usage",
+              "name": "tokens_utilises",
+              "value": "={{ $json.usage.total_tokens }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fefb0b76-89e2-4a17-a21f-70a7fac8c48b",
+      "name": "Set - Structure Données",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        112,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": {{ $json.success }},\n  \"timestamp\": \"{{ $json.timestamp }}\",\n  \"top_metier\": \"{{ $json.top_metier }}\",\n  \"top_score\": {{ $json.top_score }},\n  \"total_metiers\": {{ $json.total_metiers }},\n  \"tokens_utilises\": {{ $json.tokens_utilises }},\n  \"metiers\": {{ JSON.stringify($json.metiers) }},\n  \"html\": {{ JSON.stringify($json.html) }}\n}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "092d78af-6814-4083-8a10-f285c218d89e",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        352,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": false, \"error\": \"Champs manquants. Requis: competences, interets, experience, preferences, etudes\", \"exemple\": {\"competences\": \"Excel, communication, gestion de projet\", \"interets\": \"technologie, data, innovation\", \"experience\": \"3 ans en marketing digital\", \"preferences\": \"télétravail, autonomie, grandes entreprises\", \"etudes\": \"Bac+5 école de commerce\"}}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "9f79488c-b741-409c-b104-ef19f018b9b6",
+      "name": "Error - Payload Invalide",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -624,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-competences",
+              "leftValue": "={{ $json.body.competences }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            },
+            {
+              "id": "check-interets",
+              "leftValue": "={{ $json.body.interets }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            },
+            {
+              "id": "check-experience",
+              "leftValue": "={{ $json.body.experience }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1f77e24a-d1fd-4c63-9970-ae79b5765a81",
+      "name": "IF - Validation Payload",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -992,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ \"Profil à analyser :\\nCOMPÉTENCES : \" + $('Webhook - Profil Utilisateur').item.json.body.competences + \"\\nINTÉRÊTS : \" + $('Webhook - Profil Utilisateur').item.json.body.interets + \"\\nEXPÉRIENCE : \" + $('Webhook - Profil Utilisateur').item.json.body.experience + \"\\nPRÉFÉRENCES : \" + $('Webhook - Profil Utilisateur').item.json.body.preferences + \"\\nÉTUDES : \" + $('Webhook - Profil Utilisateur').item.json.body.etudes }}",
+        "options": {
+          "systemMessage": "Tu es un expert RH spécialisé en orientation professionnelle en France.\nAnalyse le profil utilisateur et propose exactement 5 métiers adaptés.\nRéponds UNIQUEMENT en JSON valide avec cette structure :\n{\"metiers\": [{\"nom\": string, \"description\": string, \"salaire_moyen\": string, \"compatibilite\": number, \"raisons\": [string, string, string]}]}\nNe mets aucun texte avant ou après le JSON."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -512,
+        -384
+      ],
+      "id": "a6ce5e8d-6ceb-403d-aaf0-c51bfdeca7d3",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        -528,
+        0
+      ],
+      "id": "35248e4d-fd73-410a-a530-042888459ece",
+      "name": "Mistral Cloud Chat Model",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "MNxx6hGVC1HOSiRq",
+          "name": "n8n local web-creat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// CODE NODE - Parsing AI Agent + Formatage HTML\n// ============================================\n\nconst item = $input.first();\n\n// Extraire la réponse du AI Agent natif n8n (sortie = item.json.output)\nlet rawContent;\ntry {\n  rawContent = item.json.output;\n  if (!rawContent) throw new Error('Champ output vide');\n} catch (e) {\n  throw new Error('Réponse AI Agent invalide : ' + JSON.stringify(item.json));\n}\n\n// Parser le JSON Mistral\nlet parsed;\ntry {\n  parsed = JSON.parse(rawContent);\n} catch (e) {\n  // Tentative d'extraction JSON si entouré de texte ou balises markdown\n  const jsonMatch = rawContent.match(/```json([\\s\\S]*?)```/) || rawContent.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try {\n      parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]);\n    } catch (e2) {\n      throw new Error('Impossible de parser le JSON : ' + rawContent.substring(0, 200));\n    }\n  } else {\n    throw new Error('Aucun JSON trouvé dans la réponse : ' + rawContent.substring(0, 200));\n  }\n}\n\nconst metiers = parsed.metiers || [];\n\nif (metiers.length === 0) {\n  throw new Error('Aucun métier retourné par Mistral. Réponse brute : ' + rawContent.substring(0, 300));\n}\n\n// Badge couleur selon compatibilité\nfunction getBadgeColor(score) {\n  if (score >= 85) return '#10b981'; // vert\n  if (score >= 70) return '#f59e0b'; // orange\n  return '#6366f1'; // violet\n}\n\n// HTML responsive\nconst htmlTable = `\n<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Résultats Orientation Professionnelle</title>\n  <style>\n    * { box-sizing: border-box; margin: 0; padding: 0; }\n    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; color: #1e293b; padding: 20px; }\n    h1 { text-align: center; font-size: 1.8rem; color: #1e40af; margin-bottom: 8px; }\n    .subtitle { text-align: center; color: #64748b; margin-bottom: 32px; font-size: 0.95rem; }\n    .cards { display: flex; flex-direction: column; gap: 20px; max-width: 800px; margin: 0 auto; }\n    .card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-left: 5px solid #6366f1; transition: transform 0.2s; }\n    .card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.12); }\n    .card-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }\n    .job-name { font-size: 1.25rem; font-weight: 700; color: #1e293b; }\n    .badge { padding: 6px 14px; border-radius: 999px; color: white; font-weight: 700; font-size: 0.9rem; white-space: nowrap; }\n    .description { color: #475569; line-height: 1.6; margin-bottom: 14px; }\n    .salary { display: inline-block; background: #f0fdf4; color: #166534; padding: 4px 12px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; margin-bottom: 14px; }\n    .raisons-title { font-weight: 600; color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }\n    .raisons { list-style: none; }\n    .raisons li { padding: 4px 0; padding-left: 20px; position: relative; color: #334155; font-size: 0.92rem; }\n    .raisons li::before { content: '✓'; position: absolute; left: 0; color: #10b981; font-weight: 700; }\n    .footer { text-align: center; margin-top: 32px; color: #94a3b8; font-size: 0.8rem; }\n    @media (max-width: 600px) { .card { padding: 16px; } .job-name { font-size: 1.1rem; } }\n  </style>\n</head>\n<body>\n  <h1>🎯 Tes Métiers Idéaux</h1>\n  <p class=\"subtitle\">Analyse personnalisée basée sur ton profil — ${new Date().toLocaleDateString('fr-FR')}</p>\n  <div class=\"cards\">\n    ${metiers.map((m, i) => `\n    <div class=\"card\" style=\"border-left-color: ${getBadgeColor(m.compatibilite)}\">\n      <div class=\"card-header\">\n        <div class=\"job-name\">${i + 1}. ${m.nom}</div>\n        <div class=\"badge\" style=\"background: ${getBadgeColor(m.compatibilite)}\">${m.compatibilite}% match</div>\n      </div>\n      <p class=\"description\">${m.description}</p>\n      <div class=\"salary\">💰 ${m.salaire_moyen} / an brut</div>\n      <div class=\"raisons-title\">Pourquoi ça te correspond</div>\n      <ul class=\"raisons\">\n        ${m.raisons.map(r => `<li>${r}</li>`).join('')}\n      </ul>\n    </div>`).join('')}\n  </div>\n  <div class=\"footer\">Généré par Agent Orientation Pro · Mistral AI</div>\n</body>\n</html>\n`;\n\nreturn {\n  json: {\n    success: true,\n    timestamp: new Date().toISOString(),\n    metiers: metiers,\n    total_metiers: metiers.length,\n    html: htmlTable,\n    usage: {\n      prompt_tokens: 0,\n      completion_tokens: 0,\n      total_tokens: 0\n    }\n  }\n};"
+      },
+      "id": "5233b3a6-7c7f-4002-b6b7-7e8ce3fed99c",
+      "name": "Code - Parsing + HTML1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        -208
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - Profil Utilisateur": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Validation Payload": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Error - Payload Invalide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Structure Données": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral Cloud Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code - Parsing + HTML1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parsing + HTML1": {
+      "main": [
+        [
+          {
+            "node": "Set - Structure Données",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "createdAt": "2026-03-06 18:08:47.628",
+  "updatedAt": "2026-03-09 09:27:59.039",
+  "description": ""
+}
